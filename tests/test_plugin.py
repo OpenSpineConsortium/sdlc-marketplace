@@ -52,9 +52,18 @@ SKILLS = ("claim", "remember", "checkpoint")
 # since main's copy is still the old one.
 NEEDED = {"guard.py", "vendoring.py"}
 
-# A clone of the library beside this one, as /home/user/sdlc-protocol is
-# beside /home/user/sdlc-marketplace, or the one SDLC_PROTOCOL names.
+# The clone of the library SDLC_PROTOCOL names, which CI makes and names
+# (.github/workflows/ci.yml), or else one beside this repository, as
+# /home/user/sdlc-protocol is beside /home/user/sdlc-marketplace. A clone
+# named on purpose is one the comparison with the library must have; a
+# clone that only happens to sit beside this one may be absent or behind,
+# and then the comparison is skipped.
 LIBRARY = Path(os.environ.get("SDLC_PROTOCOL") or ROOT.parent / "sdlc-protocol")
+LIBRARY_NAMED = bool(os.environ.get("SDLC_PROTOCOL"))
+CI = ROOT / ".github" / "workflows" / "ci.yml"
+CLONE = 'git clone --quiet https://github.com/OpenSpineConsortium/sdlc-protocol "$RUNNER_TEMP/sdlc-protocol"'
+NAMED_IN_CI = "SDLC_PROTOCOL: ${{ runner.temp }}/sdlc-protocol"
+COMPARISON = "VendoredGuardTest.test_every_file_is_the_librarys_at_that_commit"
 
 sys.path.insert(0, str(SCRIPTS))
 
@@ -227,6 +236,33 @@ def files_the_library_names(eco, consumer, commit):
     return sorted(set(consumer["modules"]) | set(eco["always_copied"]))
 
 
+def why_the_library_cannot_compare(commit):
+    """What stands in the way of comparing the copy with the library at
+    commit, or "" when nothing does."""
+    if not (LIBRARY / ".git").exists():
+        return f"no clone of sdlc-protocol at {LIBRARY}"
+    if library_git("cat-file", "-e", f"{commit}^{{commit}}").returncode != 0:
+        return (f"the clone at {LIBRARY} does not have {commit}, the commit VENDORED names: "
+                "vendor a commit of sdlc-protocol's, never write one into the record by hand")
+    return ""
+
+
+def compare_with(clone):
+    """The comparison with the library run on its own, in a process of its
+    own, with SDLC_PROTOCOL naming clone, as CI names its own."""
+    return subprocess.run([sys.executable, "-B", str(Path(__file__).resolve()), COMPARISON],
+                          cwd=ROOT, env=clean_env(SDLC_PROTOCOL=str(clone)), capture_output=True,
+                          text=True, timeout=60)
+
+
+def ci_steps():
+    """The steps of ci.yml's one job, each as its lines with the indent
+    stripped. The workflow is read as text, the standard library having no
+    YAML parser; each step starts with a dash six spaces in."""
+    steps = CI.read_text(encoding="utf-8").split("\n    steps:\n", 1)[1]
+    return [[line.strip() for line in step.splitlines()] for step in re.split(r"\n(?=      - )", steps)]
+
+
 class VendoredGuardTest(unittest.TestCase):
     """The copy of the push guard is sdlc-protocol's, unchanged, and
     vendor/VENDORED is its one record: the release, the commit and the
@@ -259,13 +295,19 @@ class VendoredGuardTest(unittest.TestCase):
         self.assertRegex(self.commit, r"^[0-9a-f]{40}$")
 
     def recorded_commit_in_the_library(self):
-        """Read from a clone of the library beside this repository; skipped
-        where there is none, as on CI, where verify still holds the copy
-        to its record."""
-        if not (LIBRARY / ".git").exists():
-            self.skipTest(f"no clone of sdlc-protocol at {LIBRARY}")
-        if library_git("cat-file", "-e", f"{self.commit}^{{commit}}").returncode != 0:
-            self.skipTest(f"the clone at {LIBRARY} does not have {self.commit}")
+        """VENDORED sits in this tree, so a pull request that edits the copy
+        can rewrite the file's line in it too and verify passes; the
+        comparison with the library is what fails it. It reads the clone
+        SDLC_PROTOCOL names, as CI's, and fails when that clone is missing
+        or has no such commit, so a made-up commit does not pass as
+        skipped; with SDLC_PROTOCOL unset it reads a clone beside this
+        repository and is skipped when there is none or when it is
+        behind."""
+        missing = why_the_library_cannot_compare(self.commit)
+        if missing and LIBRARY_NAMED:
+            self.fail(f"{missing} (SDLC_PROTOCOL names it)")
+        if missing:
+            self.skipTest(missing)
 
     def test_every_file_is_the_librarys_at_that_commit(self):
         self.recorded_commit_in_the_library()
@@ -395,6 +437,35 @@ class WorkflowTest(unittest.TestCase):
         self.assertTrue(actions)
         for action in actions:
             self.assertRegex(action, r"^actions/[\w-]+@v\d+$")
+
+    def test_it_clones_the_library_and_names_the_clone_to_the_checks(self):
+        steps = ci_steps()
+        clone = next(number for number, step in enumerate(steps) if f"run: {CLONE}" in step)
+        checks = next(number for number, step in enumerate(steps) if "run: bash scripts/check.sh" in step)
+        self.assertLess(clone, checks)
+        self.assertIn(NAMED_IN_CI, steps[checks])
+
+
+class TheComparisonOnCITest(unittest.TestCase):
+    """CI names its clone of sdlc-protocol to the checks, so the comparison
+    with the library runs on every pull request; where the clone it names
+    is missing, or has no commit of the one VENDORED names, the comparison
+    fails rather than skips."""
+
+    def test_a_named_clone_that_is_not_there_fails_the_comparison(self):
+        with tempfile.TemporaryDirectory() as folder:
+            done = compare_with(Path(folder) / "sdlc-protocol")
+        self.assertEqual(done.returncode, 1, done.stderr)
+        self.assertIn("no clone of sdlc-protocol at", done.stderr)
+        self.assertNotIn("skipped", done.stderr)
+
+    def test_a_named_clone_without_the_recorded_commit_fails_the_comparison(self):
+        with tempfile.TemporaryDirectory() as folder:
+            subprocess.run(["git", "init", "--quiet", folder], check=True, capture_output=True, env=clean_env())
+            done = compare_with(folder)
+        self.assertEqual(done.returncode, 1, done.stderr)
+        self.assertIn("the commit VENDORED names", done.stderr)
+        self.assertNotIn("skipped", done.stderr)
 
 
 class GuardHookTest(unittest.TestCase):

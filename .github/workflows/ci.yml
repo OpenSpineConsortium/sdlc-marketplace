@@ -12,6 +12,15 @@ name: Checks
 # plugin validate and says so; it runs wherever the checks are run by hand
 # with Claude Code installed. A newer push to the same branch cancels the
 # run still going.
+# Before the checks the job clones OpenSpineConsortium/sdlc-protocol, which
+# is public, so the clone needs no token, and names the clone to them in
+# SDLC_PROTOCOL. check.sh's vendoring.py verify holds the copy to
+# plugins/sdlc/vendor/VENDORED, but both sit in this tree, and a pull
+# request that edits the copy can rewrite its line in VENDORED as easily;
+# with the clone named, tests/test_plugin.py compares every file of the
+# copy with the library's at the commit VENDORED names, and fails, rather
+# than skips, when the clone is missing or has no such commit, so neither
+# edit passes the check.
 
 on:
   pull_request:
@@ -35,5 +44,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Clone sdlc-protocol, the library the copy is held to
+        run: git clone --quiet https://github.com/OpenSpineConsortium/sdlc-protocol "$RUNNER_TEMP/sdlc-protocol"
+
       - name: Run the checks
+        env:
+          SDLC_PROTOCOL: ${{ runner.temp }}/sdlc-protocol
         run: bash scripts/check.sh

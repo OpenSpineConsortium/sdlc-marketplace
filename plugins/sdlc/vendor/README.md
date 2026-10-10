@@ -12,7 +12,7 @@ VENDORED is the one record of the copy: its first line names the release and the
 python3 plugins/sdlc/vendor/sdlc_protocol/vendoring.py verify plugins/sdlc/vendor
 ```
 
-which fails on a file whose bytes are not the ones recorded, a recorded file that is missing, or a file beside them that is not recorded. tests/test_plugin.py holds the record to the files the plugin needs and, when a clone of sdlc-protocol sits beside this repository, every file to the library's at the recorded commit.
+which fails on a file whose bytes are not the ones recorded, a recorded file that is missing, or a file beside them that is not recorded. VENDORED sits in the same tree, so a pull request that edits the copy could rewrite it to match; tests/test_plugin.py therefore holds the record to the files the plugin needs and every file to the library's at the recorded commit, in the clone of sdlc-protocol that SDLC_PROTOCOL names, or else one beside this repository. CI clones sdlc-protocol, which is public, and names the clone, so there the comparison always runs, and fails when the clone has no such commit; with no clone named and none beside, as on a machine without one, it is skipped.
 
 The library's guard.py docstring speaks of its cli.py and a "guard" subcommand; in this plugin, scripts/guard.py plays that part, reading the hook's JSON from stdin and calling guard.run().
 
