@@ -1,6 +1,6 @@
 {
   "name": "sdlc",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The board protocol of OpenSpineConsortium/sdlc-template for Claude Code: claim, remember and checkpoint skills, the board command, a push guard, a document check after every edit, and the board printed at session start.",
   "author": {
     "name": "OpenSpineConsortium"

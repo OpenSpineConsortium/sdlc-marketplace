@@ -18,7 +18,7 @@ The library's guard.py docstring speaks of its cli.py and a "guard" subcommand; 
 
 ## How the copy is refreshed
 
-Never edit the copy by hand: change the code in sdlc-protocol, by pull request there. When that change reaches sdlc-protocol's main, its sync workflow vendors the new package into this repository and opens the pull request `sdlc-protocol/sync` here, or updates the one already open, and sets it to merge by itself once this repository's check is green. The copy here then matches the library; a session with the plugin installed runs the new guard from the plugin's next release, the version bump in plugins/sdlc/.claude-plugin/plugin.json that the Checks section of the README at the repository root describes.
+Never edit the copy by hand: change the code in sdlc-protocol, by pull request there. When that change reaches sdlc-protocol's main, its sync workflow vendors the new package into this repository and opens the pull request `sdlc-protocol/sync` here, or updates the one already open, and sets it to merge by itself once this repository's check is green. When the copy's files change, the same commit raises the patch version in plugins/sdlc/.claude-plugin/plugin.json, which sdlc-protocol's ecosystem.json names as this repository's version file: Claude Code keeps an installed plugin on its cached copy until that version changes, so the merge that brings a new guard is also the release that takes it to every session with the plugin installed, at its next plugin update. A sync that only moves VENDORED's commit, the copy's files being what they were, leaves the version alone.
 
 To vendor by hand, from a clone of sdlc-protocol:
 
@@ -26,4 +26,4 @@ To vendor by hand, from a clone of sdlc-protocol:
 python3 <sdlc-protocol>/scripts/vendor.py <this repository>
 ```
 
-then run `bash scripts/check.sh` here and land the change by pull request.
+which raises the plugin's version too when the copy's files change; then run `bash scripts/check.sh` here and land the change by pull request.

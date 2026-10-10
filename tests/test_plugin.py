@@ -8,7 +8,10 @@ guard's expected messages are the template's tools/guard_push.py words,
 and the edit check's cases are the template's tests/test_check_edit.py,
 ported to a plugin that runs the repository's own checks. The vendored
 copy of the guard is held to its record, vendor/VENDORED, and CI to the
-one job "check" that runs scripts/check.sh.
+one job "check" that runs scripts/check.sh. The plugin's version is held
+to what lets a new copy reach the sessions that have it installed: the
+library names plugin.json as this repository's version file, its sync
+raises it with each new copy, and the project preset turns auto-update on.
 """
 
 import hashlib
@@ -33,6 +36,8 @@ VENDOR = PLUGIN / "vendor"
 VENDORED = VENDOR / "VENDORED"
 PACKAGE = VENDOR / "sdlc_protocol"
 VENDORED_GUARD = PACKAGE / "guard.py"
+MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
+REPOSITORY = "OpenSpineConsortium/sdlc-marketplace"
 SKILLS = ("claim", "remember", "checkpoint")
 
 # What sdlc-protocol's ecosystem.json has this repository take: the push
@@ -267,6 +272,67 @@ class VendoredGuardTest(unittest.TestCase):
         verify = lines.index("python3 plugins/sdlc/vendor/sdlc_protocol/vendoring.py verify plugins/sdlc/vendor")
         tests = next(number for number, line in enumerate(lines) if "-m unittest" in line)
         self.assertLess(verify, tests)
+
+
+def project_preset():
+    """The JSON block of the README's section "The project preset"."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    section = readme.split("\n## The project preset\n", 1)[1].split("\n## ", 1)[0]
+    return json.loads(re.search(r"```json\n(.*?)```", section, re.DOTALL).group(1))
+
+
+def next_patch(version):
+    major, minor, patch = version.split(".")
+    return f"{major}.{minor}.{int(patch) + 1}"
+
+
+class ReleaseTest(unittest.TestCase):
+    """Claude Code keeps an installed plugin on its cached copy until the
+    version in plugin.json changes, so a new copy of the guard that came
+    without a new version would land here and reach no session. The
+    library's sync raises the version with each new copy; these tests hold
+    this repository to the parts of that it owns."""
+
+    def library_consumer(self):
+        if not (LIBRARY / "ecosystem.json").is_file():
+            self.skipTest(f"no clone of sdlc-protocol at {LIBRARY}")
+        eco = read_json(LIBRARY / "ecosystem.json")
+        return next(c for c in eco["consumers"] if c["repository"].lower() == REPOSITORY.lower())
+
+    def test_the_library_names_this_manifest_as_the_version_file(self):
+        consumer = self.library_consumer()
+        self.assertEqual(ROOT / consumer["vendor_dir"], VENDOR)
+        self.assertEqual(ROOT / consumer["version_file"], MANIFEST)
+
+    def test_a_new_copy_raises_the_version_and_nothing_else_in_the_manifest(self):
+        """The library's vendor.py on a scratch copy of this repository whose
+        guard is not the library's, as main's is before a sync."""
+        self.library_consumer()
+        with tempfile.TemporaryDirectory() as folder:
+            scratch = Path(folder) / "marketplace"
+            shutil.copytree(ROOT, scratch, ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"))
+            guard = scratch / VENDORED_GUARD.relative_to(ROOT)
+            guard.write_text(guard.read_text(encoding="ascii") + "# an older guard\n", encoding="ascii")
+            done = subprocess.run([sys.executable, "-B", str(LIBRARY / "scripts" / "vendor.py"), str(scratch),
+                                   "--consumer", REPOSITORY], capture_output=True, text=True, timeout=60,
+                                  env=clean_env())
+            self.assertEqual(done.returncode, 0, done.stderr)
+            before = MANIFEST.read_text(encoding="ascii")
+            version = read_json(MANIFEST)["version"]
+            after = (scratch / MANIFEST.relative_to(ROOT)).read_text(encoding="ascii")
+        self.assertEqual(after, before.replace(f'"version": "{version}"', f'"version": "{next_patch(version)}"'))
+        self.assertNotEqual(after, before)
+
+    def test_the_project_preset_turns_auto_update_on(self):
+        """Claude Code leaves auto-update off for a marketplace that is not
+        Anthropic's; the preset turns it on, so a release reaches every
+        session in the repository by itself."""
+        preset = project_preset()
+        name = read_json(ROOT / ".claude-plugin" / "marketplace.json")["name"]
+        entry = preset["extraKnownMarketplaces"][name]
+        self.assertEqual(entry["source"], {"source": "github", "repo": REPOSITORY})
+        self.assertIs(entry["autoUpdate"], True)
+        self.assertEqual(preset["enabledPlugins"], {f"sdlc@{name}": True})
 
 
 class WorkflowTest(unittest.TestCase):
