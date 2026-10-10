@@ -1,11 +1,29 @@
 # Vendored code
 
-sdlc_protocol/guard.py is the push guard of the sdlc_protocol library, copied unchanged from OpenSpineConsortium/sdlc-protocol, so that the plugin runs on a bare Python 3.12 with nothing installed and refuses the same pushes, with the same words, as the library and the template's tools/guard_push.py. It imports only the standard library, so no other module of the package is needed; sdlc_protocol/__init__.py is the plugin's own, a docstring and nothing else.
+sdlc_protocol/ is a copy of part of the sdlc_protocol package of OpenSpineConsortium/sdlc-protocol, so that the plugin runs on a bare Python 3.12 with nothing installed and refuses the same pushes, with the same words, as the library and the template's tools/guard_push.py, which runs the same code. sdlc-protocol's ecosystem.json says what this repository takes, and the copy holds exactly that:
 
-- Source: https://github.com/OpenSpineConsortium/sdlc-protocol, file sdlc_protocol/guard.py.
-- Taken: 2026-10-10, from the branch wip/extract as its working tree stood, which is commit bb0cff3 with the change that adds run(), command_of() and where_to_ask() not yet committed there.
-- sha256 of guard.py: d17f7217f00ad9c7182f5b980838e2696a6889e8fced7158e95d46740688a889
+- sdlc_protocol/guard.py: the push guard. It imports only the standard library, so no other module of the package is needed.
+- sdlc_protocol/__init__.py: the package's docstring and its version.
+- sdlc_protocol/vendoring.py: the check of the copy, which every copy carries.
 
-The library's docstring speaks of its cli.py and a "guard" subcommand; in this plugin, its scripts/guard.py plays that part, reading the hook's JSON from stdin and calling guard.run().
+VENDORED is the one record of the copy: its first line names the release and the commit of sdlc-protocol it was made from, `sdlc-protocol <version> <commit>`, and each line after it the sha256 of one copied file and its path inside sdlc_protocol/. scripts/check.sh, the check CI runs on every pull request, holds the copy to it first of all:
 
-To refresh: copy sdlc_protocol/guard.py from a tagged release of sdlc-protocol over this one, change nothing in it, record the release and the new sha256 above, and run `bash scripts/check.sh` at the repository root; tests/test_plugin.py fails when the file and the recorded sha256 disagree, so an edit made here by hand cannot pass unnoticed.
+```
+python3 plugins/sdlc/vendor/sdlc_protocol/vendoring.py verify plugins/sdlc/vendor
+```
+
+which fails on a file whose bytes are not the ones recorded, a recorded file that is missing, or a file beside them that is not recorded. tests/test_plugin.py holds the record to the files the plugin needs and, when a clone of sdlc-protocol sits beside this repository, every file to the library's at the recorded commit.
+
+The library's guard.py docstring speaks of its cli.py and a "guard" subcommand; in this plugin, scripts/guard.py plays that part, reading the hook's JSON from stdin and calling guard.run().
+
+## How the copy is refreshed
+
+Never edit the copy by hand: change the code in sdlc-protocol, by pull request there. When that change reaches sdlc-protocol's main, its sync workflow vendors the new package into this repository and opens the pull request `sdlc-protocol/sync` here, or updates the one already open, and sets it to merge by itself once this repository's check is green. The copy here then matches the library; a session with the plugin installed runs the new guard from the plugin's next release, the version bump in plugins/sdlc/.claude-plugin/plugin.json that the Checks section of the README at the repository root describes.
+
+To vendor by hand, from a clone of sdlc-protocol:
+
+```
+python3 <sdlc-protocol>/scripts/vendor.py <this repository>
+```
+
+then run `bash scripts/check.sh` here and land the change by pull request.

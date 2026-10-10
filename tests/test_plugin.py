@@ -6,15 +6,19 @@ hooks for the scripts they name, and the scripts by running them the way
 Claude Code does: JSON on stdin, an exit code and stderr back. The push
 guard's expected messages are the template's tools/guard_push.py words,
 and the edit check's cases are the template's tests/test_check_edit.py,
-ported to a plugin that runs the repository's own checks.
+ported to a plugin that runs the repository's own checks. The vendored
+copy of the guard is held to its record, vendor/VENDORED, and CI to the
+one job "check" that runs scripts/check.sh.
 """
 
 import hashlib
+import importlib.util
 import io
 import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -25,8 +29,20 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parent.parent
 PLUGIN = ROOT / "plugins" / "sdlc"
 SCRIPTS = PLUGIN / "scripts"
-VENDORED_GUARD = PLUGIN / "vendor" / "sdlc_protocol" / "guard.py"
+VENDOR = PLUGIN / "vendor"
+VENDORED = VENDOR / "VENDORED"
+PACKAGE = VENDOR / "sdlc_protocol"
+VENDORED_GUARD = PACKAGE / "guard.py"
 SKILLS = ("claim", "remember", "checkpoint")
+
+# What sdlc-protocol's ecosystem.json has this repository take: the push
+# guard, which imports only the standard library, and the two files every
+# copy carries, the package's version and the check of the copy.
+TAKEN = ["__init__.py", "guard.py", "vendoring.py"]
+
+# A clone of the library beside this one, as /home/user/sdlc-protocol is
+# beside /home/user/sdlc-marketplace, or the one SDLC_PROTOCOL names.
+LIBRARY = Path(os.environ.get("SDLC_PROTOCOL") or ROOT.parent / "sdlc-protocol")
 
 sys.path.insert(0, str(SCRIPTS))
 
@@ -167,14 +183,115 @@ class HooksTest(unittest.TestCase):
             self.assertEqual(Path(script).parent, SCRIPTS, command)
 
 
+def load_vendoring():
+    """The vendored vendoring.py, loaded by its path as check.sh runs it,
+    without the package around it."""
+    spec = importlib.util.spec_from_file_location("vendored_vendoring", PACKAGE / "vendoring.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_verify(vendor_dir):
+    """vendoring.py's verify, as scripts/check.sh runs it."""
+    return subprocess.run([sys.executable, "-B", str(Path(vendor_dir) / "sdlc_protocol" / "vendoring.py"),
+                           "verify", str(vendor_dir)], capture_output=True, text=True, timeout=60)
+
+
+def library_git(*args):
+    return subprocess.run(["git", "-C", str(LIBRARY), *args], capture_output=True, env=clean_env())
+
+
 class VendoredGuardTest(unittest.TestCase):
-    def test_the_vendored_guard_is_the_copy_its_readme_records(self):
-        """vendor/README.md records the sha256 of the file as copied; a hand
-        edit here would make the plugin and the library disagree."""
-        readme = (PLUGIN / "vendor" / "README.md").read_text(encoding="utf-8")
-        recorded = re.search(r"sha256 of guard\.py: ([0-9a-f]{64})", readme).group(1)
+    """The copy of the push guard is sdlc-protocol's, unchanged, and
+    vendor/VENDORED is its one record: the release, the commit and the
+    sha256 of every file, which scripts/check.sh holds the copy to. A hand
+    edit here would make the plugin and the library disagree."""
+
+    def setUp(self):
+        self.vendoring = load_vendoring()
+        self.version, self.commit, self.digests = self.vendoring.parse_record(
+            VENDORED.read_text(encoding="ascii"))
+
+    def test_the_copy_is_exactly_what_vendored_records(self):
+        self.assertEqual(self.vendoring.problems(VENDOR), [])
+
+    def test_vendored_records_the_guard_and_what_every_copy_carries(self):
+        self.assertEqual(sorted(self.digests), TAKEN)
+
+    def test_the_vendored_guard_is_the_copy_its_record_records(self):
         actual = hashlib.sha256(VENDORED_GUARD.read_bytes()).hexdigest()
-        self.assertEqual(actual, recorded)
+        self.assertEqual(actual, self.digests["guard.py"])
+
+    def test_the_package_states_the_version_vendored_names(self):
+        init = (PACKAGE / "__init__.py").read_text(encoding="utf-8")
+        self.assertIn(f'__version__ = "{self.version}"\n', init)
+
+    def test_vendored_names_a_whole_commit_with_no_changes_on_top(self):
+        """A copy made from a library with uncommitted changes, or from no
+        checkout at all, is a copy no commit of sdlc-protocol holds."""
+        self.assertRegex(self.commit, r"^[0-9a-f]{40}$")
+
+    def test_every_file_is_the_librarys_at_that_commit(self):
+        """Read from a clone of the library beside this repository; skipped
+        where there is none, as on CI, where verify still holds the copy
+        to its record."""
+        if not (LIBRARY / ".git").exists():
+            self.skipTest(f"no clone of sdlc-protocol at {LIBRARY}")
+        if library_git("cat-file", "-e", f"{self.commit}^{{commit}}").returncode != 0:
+            self.skipTest(f"the clone at {LIBRARY} does not have {self.commit}")
+        for name in TAKEN:
+            with self.subTest(name=name):
+                theirs = library_git("show", f"{self.commit}:sdlc_protocol/{name}")
+                self.assertEqual(theirs.returncode, 0, theirs.stderr)
+                self.assertEqual((PACKAGE / name).read_bytes(), theirs.stdout)
+
+    def test_verify_passes_on_the_copy_as_it_is(self):
+        done = run_verify(VENDOR)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(done.stdout, f"vendored sdlc-protocol {self.version} at {self.commit[:7]}: "
+                                      f"{len(TAKEN)} files match VENDORED\n")
+
+    def test_verify_fails_on_a_hand_edit_of_the_guard(self):
+        with tempfile.TemporaryDirectory() as folder:
+            copy = Path(folder) / "vendor"
+            shutil.copytree(VENDOR, copy, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            with (copy / "sdlc_protocol" / "guard.py").open("a", encoding="ascii") as guard:
+                guard.write("# a hand edit\n")
+            done = run_verify(copy)
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("guard.py was edited by hand", done.stdout)
+
+    def test_the_checks_verify_the_copy_before_the_tests(self):
+        lines = (ROOT / "scripts" / "check.sh").read_text(encoding="utf-8").splitlines()
+        verify = lines.index("python3 plugins/sdlc/vendor/sdlc_protocol/vendoring.py verify plugins/sdlc/vendor")
+        tests = next(number for number, line in enumerate(lines) if "-m unittest" in line)
+        self.assertLess(verify, tests)
+
+
+class WorkflowTest(unittest.TestCase):
+    """CI runs the same checks as a person does, as the one job "check",
+    the name a ruleset requires and the sync's auto-merge waits on."""
+
+    def setUp(self):
+        self.text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    def test_the_one_job_is_named_check(self):
+        jobs = self.text.split("\njobs:\n", 1)[1]
+        self.assertEqual(re.findall(r"^  ([\w-]+):$", jobs, re.MULTILINE), ["check"])
+
+    def test_it_runs_the_checks_on_python_3_12(self):
+        self.assertIn("python-version: \"3.12\"\n", self.text)
+        self.assertIn("run: bash scripts/check.sh\n", self.text)
+
+    def test_it_runs_on_pull_requests_and_pushes_to_main(self):
+        self.assertIn("on:\n  pull_request:\n  push:\n    branches: [main]\n", self.text)
+
+    def test_every_action_is_pinned_to_a_major_tag(self):
+        actions = re.findall(r"uses: (\S+)", self.text)
+        self.assertTrue(actions)
+        for action in actions:
+            self.assertRegex(action, r"^actions/[\w-]+@v\d+$")
 
 
 class GuardHookTest(unittest.TestCase):
