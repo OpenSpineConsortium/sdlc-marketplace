@@ -7,11 +7,13 @@ Claude Code does: JSON on stdin, an exit code and stderr back. The push
 guard's expected messages are the template's tools/guard_push.py words,
 and the edit check's cases are the template's tests/test_check_edit.py,
 ported to a plugin that runs the repository's own checks. The vendored
-copy of the guard is held to its record, vendor/VENDORED, and CI to the
-one job "check" that runs scripts/check.sh. The plugin's version is held
-to what lets a new copy reach the sessions that have it installed: the
-library names plugin.json as this repository's version file, its sync
-raises it with each new copy, and the project preset turns auto-update on.
+copy of the guard is held to its record, vendor/VENDORED, and to the files
+sdlc-protocol's ecosystem.json names for this repository, never to a list
+of its own here, and CI to the one job "check" that runs scripts/check.sh.
+The plugin's version is held to what lets a new copy reach the sessions
+that have it installed: the library names plugin.json as this repository's
+version file, its sync raises it with each new copy, and the project
+preset turns auto-update on.
 """
 
 import hashlib
@@ -40,10 +42,15 @@ MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
 REPOSITORY = "OpenSpineConsortium/sdlc-marketplace"
 SKILLS = ("claim", "remember", "checkpoint")
 
-# What sdlc-protocol's ecosystem.json has this repository take: the push
-# guard, which imports only the standard library, and the two files every
-# copy carries, the package's version and the check of the copy.
-TAKEN = ["__init__.py", "guard.py", "vendoring.py"]
+# What the plugin itself runs from the copy: the push guard, which the
+# PreToolUse hook calls, and the copy's own check, which scripts/check.sh
+# runs. Which files the copy holds beyond those is sdlc-protocol's
+# ecosystem.json to say, never a list here: the sync brings a new copy and
+# its new record in one pull request, so a second list on this
+# repository's main would fail that pull request whenever the library
+# changed what this repository takes, and could not be changed first,
+# since main's copy is still the old one.
+NEEDED = {"guard.py", "vendoring.py"}
 
 # A clone of the library beside this one, as /home/user/sdlc-protocol is
 # beside /home/user/sdlc-marketplace, or the one SDLC_PROTOCOL names.
@@ -165,9 +172,12 @@ class ComponentsTest(unittest.TestCase):
 
     def test_no_template_placeholder_is_left_unfilled(self):
         """The template fills {{...}} when a repository is made from it; in
-        the plugin nothing ever would."""
+        the plugin nothing ever would. The vendored copy is left out: it is
+        sdlc-protocol's code, not the template's text, held to the library
+        by verify, and a module the library gives this repository may use
+        braces of its own, which no change here could ever take out."""
         for path in sorted(PLUGIN.rglob("*")):
-            if path.is_file() and "__pycache__" not in path.parts:
+            if path.is_file() and "__pycache__" not in path.parts and VENDOR not in path.parents:
                 self.assertNotIn("{{", path.read_text(encoding="utf-8"), path)
 
 
@@ -207,6 +217,16 @@ def library_git(*args):
     return subprocess.run(["git", "-C", str(LIBRARY), *args], capture_output=True, env=clean_env())
 
 
+def files_the_library_names(eco, consumer, commit):
+    """The files ecosystem.json has the consumer take, as the library's
+    vendor.py chooses them: every file of the package at that commit for
+    "all", else the consumer's modules and the files every copy takes."""
+    if consumer["modules"] == "all":
+        listed = library_git("ls-tree", "-r", "--name-only", commit, "--", "sdlc_protocol/")
+        return sorted(name.removeprefix("sdlc_protocol/") for name in listed.stdout.decode("ascii").splitlines())
+    return sorted(set(consumer["modules"]) | set(eco["always_copied"]))
+
+
 class VendoredGuardTest(unittest.TestCase):
     """The copy of the push guard is sdlc-protocol's, unchanged, and
     vendor/VENDORED is its one record: the release, the commit and the
@@ -221,8 +241,9 @@ class VendoredGuardTest(unittest.TestCase):
     def test_the_copy_is_exactly_what_vendored_records(self):
         self.assertEqual(self.vendoring.problems(VENDOR), [])
 
-    def test_vendored_records_the_guard_and_what_every_copy_carries(self):
-        self.assertEqual(sorted(self.digests), TAKEN)
+    def test_vendored_records_what_the_plugin_runs(self):
+        self.assertLessEqual(NEEDED, set(self.digests),
+                             "sdlc-protocol's ecosystem.json must give this repository the push guard")
 
     def test_the_vendored_guard_is_the_copy_its_record_records(self):
         actual = hashlib.sha256(VENDORED_GUARD.read_bytes()).hexdigest()
@@ -237,7 +258,7 @@ class VendoredGuardTest(unittest.TestCase):
         checkout at all, is a copy no commit of sdlc-protocol holds."""
         self.assertRegex(self.commit, r"^[0-9a-f]{40}$")
 
-    def test_every_file_is_the_librarys_at_that_commit(self):
+    def recorded_commit_in_the_library(self):
         """Read from a clone of the library beside this repository; skipped
         where there is none, as on CI, where verify still holds the copy
         to its record."""
@@ -245,17 +266,33 @@ class VendoredGuardTest(unittest.TestCase):
             self.skipTest(f"no clone of sdlc-protocol at {LIBRARY}")
         if library_git("cat-file", "-e", f"{self.commit}^{{commit}}").returncode != 0:
             self.skipTest(f"the clone at {LIBRARY} does not have {self.commit}")
-        for name in TAKEN:
+
+    def test_every_file_is_the_librarys_at_that_commit(self):
+        self.recorded_commit_in_the_library()
+        for name in sorted(self.digests):
             with self.subTest(name=name):
                 theirs = library_git("show", f"{self.commit}:sdlc_protocol/{name}")
                 self.assertEqual(theirs.returncode, 0, theirs.stderr)
                 self.assertEqual((PACKAGE / name).read_bytes(), theirs.stdout)
 
+    def test_the_librarys_ecosystem_names_these_files_for_this_repository(self):
+        """The exact set of files, as the library's ecosystem.json at the
+        recorded commit has this repository take them."""
+        self.recorded_commit_in_the_library()
+        shown = library_git("show", f"{self.commit}:ecosystem.json")
+        if shown.returncode != 0:
+            self.skipTest(f"the library at {self.commit} has no ecosystem.json")
+        eco = json.loads(shown.stdout)
+        ours = [c for c in eco["consumers"] if c["repository"].lower() == REPOSITORY.lower()]
+        self.assertEqual(len(ours), 1)
+        self.assertEqual(ROOT / ours[0]["vendor_dir"], VENDOR)
+        self.assertEqual(files_the_library_names(eco, ours[0], self.commit), sorted(self.digests))
+
     def test_verify_passes_on_the_copy_as_it_is(self):
         done = run_verify(VENDOR)
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertEqual(done.stdout, f"vendored sdlc-protocol {self.version} at {self.commit[:7]}: "
-                                      f"{len(TAKEN)} files match VENDORED\n")
+                                      f"{len(self.digests)} files match VENDORED\n")
 
     def test_verify_fails_on_a_hand_edit_of_the_guard(self):
         with tempfile.TemporaryDirectory() as folder:
