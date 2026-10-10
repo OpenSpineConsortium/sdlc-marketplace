@@ -1,0 +1,14 @@
+{
+  "name": "sdlc-marketplace",
+  "description": "The Claude Code side of the OpenSpineConsortium SDLC: the board protocol's skills, the board command and the hooks that keep a repository made from sdlc-template to its rules.",
+  "owner": {
+    "name": "OpenSpineConsortium"
+  },
+  "plugins": [
+    {
+      "name": "sdlc",
+      "source": "./plugins/sdlc",
+      "description": "Claim, remember and checkpoint skills, the /sdlc:board command, a push guard that refuses what the board rules forbid, a document check after every edit, and the board printed at session start."
+    }
+  ]
+}

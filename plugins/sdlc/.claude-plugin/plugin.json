@@ -1,0 +1,19 @@
+{
+  "name": "sdlc",
+  "version": "0.1.0",
+  "description": "The board protocol of OpenSpineConsortium/sdlc-template for Claude Code: claim, remember and checkpoint skills, the board command, a push guard, a document check after every edit, and the board printed at session start.",
+  "author": {
+    "name": "OpenSpineConsortium"
+  },
+  "repository": "https://github.com/OpenSpineConsortium/sdlc-marketplace",
+  "license": "MIT",
+  "keywords": [
+    "sdlc",
+    "board",
+    "claims",
+    "pull-requests",
+    "push-guard",
+    "multi-agent",
+    "git"
+  ]
+}

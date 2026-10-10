@@ -1,0 +1,4 @@
+# Python's caches: the tests and the hooks import the scripts, and the
+# bytecode they leave behind belongs to the machine, not the repository.
+__pycache__/
+*.pyc
