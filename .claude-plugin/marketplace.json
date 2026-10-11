@@ -1,6 +1,6 @@
 {
-  "name": "sdlc-marketplace",
-  "description": "The Claude Code side of Symphony: the board protocol's skills, the board command and the hooks that keep a repository made from sdlc-template to its rules.",
+  "name": "symphony-marketplace",
+  "description": "The Claude Code side of Symphony: the board protocol's skills, the board command and the hooks that keep a repository made from symphony-template to its rules.",
   "owner": {
     "name": "OpenSpineConsortium"
   },
