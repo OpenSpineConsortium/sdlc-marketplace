@@ -8,7 +8,7 @@ guard's expected messages are the template's tools/guard_push.py words,
 and the edit check's cases are the template's tests/test_check_edit.py,
 ported to a plugin that runs the repository's own checks. The vendored
 copy of the guard is held to its record, vendor/VENDORED, and to the files
-sdlc-protocol's ecosystem.json names for this repository, never to a list
+symphony-protocol's ecosystem.json names for this repository, never to a list
 of its own here, and CI to the one job "check" that runs scripts/check.sh.
 The plugin's version is held to what lets a new copy reach the sessions
 that have it installed: the library names plugin.json as this repository's
@@ -39,12 +39,15 @@ VENDORED = VENDOR / "VENDORED"
 PACKAGE = VENDOR / "sdlc_protocol"
 VENDORED_GUARD = PACKAGE / "guard.py"
 MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
-REPOSITORY = "OpenSpineConsortium/sdlc-marketplace"
+REPOSITORY = "OpenSpineConsortium/symphony-marketplace"
+# The library's ecosystem.json at the recorded commit, which predates the
+# rename, knows this repository by its old name; either name is this one.
+REPOSITORY_NAMES = {REPOSITORY.lower(), "openspineconsortium/sdlc-marketplace"}
 SKILLS = ("claim", "remember", "checkpoint")
 
 # What the plugin itself runs from the copy: the push guard, which the
 # PreToolUse hook calls, and the copy's own check, which scripts/check.sh
-# runs. Which files the copy holds beyond those is sdlc-protocol's
+# runs. Which files the copy holds beyond those is symphony-protocol's
 # ecosystem.json to say, never a list here: the sync brings a new copy and
 # its new record in one pull request, so a second list on this
 # repository's main would fail that pull request whenever the library
@@ -54,15 +57,26 @@ NEEDED = {"guard.py", "vendoring.py"}
 
 # The clone of the library SDLC_PROTOCOL names, which CI makes and names
 # (.github/workflows/ci.yml), or else one beside this repository, as
-# /home/user/sdlc-protocol is beside /home/user/sdlc-marketplace. A clone
+# /home/user/symphony-protocol is beside /home/user/symphony-marketplace;
+# a clone made before the rename is still called sdlc-protocol, and is
+# taken under that name when no symphony-protocol is beside. A clone
 # named on purpose is one the comparison with the library must have; a
 # clone that only happens to sit beside this one may be absent or behind,
 # and then the comparison is skipped.
-LIBRARY = Path(os.environ.get("SDLC_PROTOCOL") or ROOT.parent / "sdlc-protocol")
+
+
+def library_beside():
+    """The clone beside this repository, by its new name, or by its old one
+    when only a clone made before the rename is there."""
+    new, old = ROOT.parent / "symphony-protocol", ROOT.parent / "sdlc-protocol"
+    return old if old.exists() and not new.exists() else new
+
+
+LIBRARY = Path(os.environ.get("SDLC_PROTOCOL") or library_beside())
 LIBRARY_NAMED = bool(os.environ.get("SDLC_PROTOCOL"))
 CI = ROOT / ".github" / "workflows" / "ci.yml"
-CLONE = 'git clone --quiet https://github.com/OpenSpineConsortium/sdlc-protocol "$RUNNER_TEMP/sdlc-protocol"'
-NAMED_IN_CI = "SDLC_PROTOCOL: ${{ runner.temp }}/sdlc-protocol"
+CLONE = 'git clone --quiet https://github.com/OpenSpineConsortium/symphony-protocol "$RUNNER_TEMP/symphony-protocol"'
+NAMED_IN_CI = "SDLC_PROTOCOL: ${{ runner.temp }}/symphony-protocol"
 COMPARISON = "VendoredGuardTest.test_every_file_is_the_librarys_at_that_commit"
 
 sys.path.insert(0, str(SCRIPTS))
@@ -135,7 +149,7 @@ class MarketplaceManifestTest(unittest.TestCase):
         self.plugin = read_json(PLUGIN / ".claude-plugin" / "plugin.json")
 
     def test_marketplace_has_its_required_fields(self):
-        self.assertEqual(self.marketplace["name"], "sdlc-marketplace")
+        self.assertEqual(self.marketplace["name"], "symphony-marketplace")
         self.assertTrue(self.marketplace["description"])
         self.assertEqual(self.marketplace["owner"], {"name": "OpenSpineConsortium"})
         self.assertEqual(len(self.marketplace["plugins"]), 1)
@@ -153,7 +167,7 @@ class MarketplaceManifestTest(unittest.TestCase):
         self.assertTrue(self.plugin["description"])
         self.assertEqual(self.plugin["author"], {"name": "OpenSpineConsortium"})
         self.assertEqual(self.plugin["repository"],
-                         "https://github.com/OpenSpineConsortium/sdlc-marketplace")
+                         "https://github.com/OpenSpineConsortium/symphony-marketplace")
         self.assertTrue(self.plugin["keywords"])
 
     def test_entry_and_manifest_carry_the_same_name(self):
@@ -182,7 +196,7 @@ class ComponentsTest(unittest.TestCase):
     def test_no_template_placeholder_is_left_unfilled(self):
         """The template fills {{...}} when a repository is made from it; in
         the plugin nothing ever would. The vendored copy is left out: it is
-        sdlc-protocol's code, not the template's text, held to the library
+        symphony-protocol's code, not the template's text, held to the library
         by verify, and a module the library gives this repository may use
         braces of its own, which no change here could ever take out."""
         for path in sorted(PLUGIN.rglob("*")):
@@ -240,10 +254,10 @@ def why_the_library_cannot_compare(commit):
     """What stands in the way of comparing the copy with the library at
     commit, or "" when nothing does."""
     if not (LIBRARY / ".git").exists():
-        return f"no clone of sdlc-protocol at {LIBRARY}"
+        return f"no clone of symphony-protocol at {LIBRARY}"
     if library_git("cat-file", "-e", f"{commit}^{{commit}}").returncode != 0:
         return (f"the clone at {LIBRARY} does not have {commit}, the commit VENDORED names: "
-                "vendor a commit of sdlc-protocol's, never write one into the record by hand")
+                "vendor a commit of symphony-protocol's, never write one into the record by hand")
     return ""
 
 
@@ -264,7 +278,7 @@ def ci_steps():
 
 
 class VendoredGuardTest(unittest.TestCase):
-    """The copy of the push guard is sdlc-protocol's, unchanged, and
+    """The copy of the push guard is symphony-protocol's, unchanged, and
     vendor/VENDORED is its one record: the release, the commit and the
     sha256 of every file, which scripts/check.sh holds the copy to. A hand
     edit here would make the plugin and the library disagree."""
@@ -279,7 +293,7 @@ class VendoredGuardTest(unittest.TestCase):
 
     def test_vendored_records_what_the_plugin_runs(self):
         self.assertLessEqual(NEEDED, set(self.digests),
-                             "sdlc-protocol's ecosystem.json must give this repository the push guard")
+                             "symphony-protocol's ecosystem.json must give this repository the push guard")
 
     def test_the_vendored_guard_is_the_copy_its_record_records(self):
         actual = hashlib.sha256(VENDORED_GUARD.read_bytes()).hexdigest()
@@ -291,7 +305,7 @@ class VendoredGuardTest(unittest.TestCase):
 
     def test_vendored_names_a_whole_commit_with_no_changes_on_top(self):
         """A copy made from a library with uncommitted changes, or from no
-        checkout at all, is a copy no commit of sdlc-protocol holds."""
+        checkout at all, is a copy no commit of symphony-protocol holds."""
         self.assertRegex(self.commit, r"^[0-9a-f]{40}$")
 
     def recorded_commit_in_the_library(self):
@@ -325,7 +339,7 @@ class VendoredGuardTest(unittest.TestCase):
         if shown.returncode != 0:
             self.skipTest(f"the library at {self.commit} has no ecosystem.json")
         eco = json.loads(shown.stdout)
-        ours = [c for c in eco["consumers"] if c["repository"].lower() == REPOSITORY.lower()]
+        ours = [c for c in eco["consumers"] if c["repository"].lower() in REPOSITORY_NAMES]
         self.assertEqual(len(ours), 1)
         self.assertEqual(ROOT / ours[0]["vendor_dir"], VENDOR)
         self.assertEqual(files_the_library_names(eco, ours[0], self.commit), sorted(self.digests))
@@ -374,9 +388,9 @@ class ReleaseTest(unittest.TestCase):
 
     def library_consumer(self):
         if not (LIBRARY / "ecosystem.json").is_file():
-            self.skipTest(f"no clone of sdlc-protocol at {LIBRARY}")
+            self.skipTest(f"no clone of symphony-protocol at {LIBRARY}")
         eco = read_json(LIBRARY / "ecosystem.json")
-        return next(c for c in eco["consumers"] if c["repository"].lower() == REPOSITORY.lower())
+        return next(c for c in eco["consumers"] if c["repository"].lower() in REPOSITORY_NAMES)
 
     def test_the_library_names_this_manifest_as_the_version_file(self):
         consumer = self.library_consumer()
@@ -386,14 +400,16 @@ class ReleaseTest(unittest.TestCase):
     def test_a_new_copy_raises_the_version_and_nothing_else_in_the_manifest(self):
         """The library's vendor.py on a scratch copy of this repository whose
         guard is not the library's, as main's is before a sync."""
-        self.library_consumer()
+        # --consumer takes the name the library's ecosystem.json has, which
+        # may still be the old one.
+        consumer = self.library_consumer()
         with tempfile.TemporaryDirectory() as folder:
             scratch = Path(folder) / "marketplace"
             shutil.copytree(ROOT, scratch, ignore=shutil.ignore_patterns(".git", "__pycache__", "*.pyc"))
             guard = scratch / VENDORED_GUARD.relative_to(ROOT)
             guard.write_text(guard.read_text(encoding="ascii") + "# an older guard\n", encoding="ascii")
             done = subprocess.run([sys.executable, "-B", str(LIBRARY / "scripts" / "vendor.py"), str(scratch),
-                                   "--consumer", REPOSITORY], capture_output=True, text=True, timeout=60,
+                                   "--consumer", consumer["repository"]], capture_output=True, text=True, timeout=60,
                                   env=clean_env())
             self.assertEqual(done.returncode, 0, done.stderr)
             before = MANIFEST.read_text(encoding="ascii")
@@ -447,16 +463,16 @@ class WorkflowTest(unittest.TestCase):
 
 
 class TheComparisonOnCITest(unittest.TestCase):
-    """CI names its clone of sdlc-protocol to the checks, so the comparison
+    """CI names its clone of symphony-protocol to the checks, so the comparison
     with the library runs on every pull request; where the clone it names
     is missing, or has no commit of the one VENDORED names, the comparison
     fails rather than skips."""
 
     def test_a_named_clone_that_is_not_there_fails_the_comparison(self):
         with tempfile.TemporaryDirectory() as folder:
-            done = compare_with(Path(folder) / "sdlc-protocol")
+            done = compare_with(Path(folder) / "symphony-protocol")
         self.assertEqual(done.returncode, 1, done.stderr)
-        self.assertIn("no clone of sdlc-protocol at", done.stderr)
+        self.assertIn("no clone of symphony-protocol at", done.stderr)
         self.assertNotIn("skipped", done.stderr)
 
     def test_a_named_clone_without_the_recorded_commit_fails_the_comparison(self):

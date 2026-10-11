@@ -4,17 +4,17 @@ name: Checks
 # default branch: bash scripts/check.sh, which verifies the vendored push
 # guard against its VENDORED record and then runs the tests on Python
 # 3.12. The job is named "check" so a ruleset can require it by that name;
-# with that rule in place, the pull request sdlc-protocol/sync, which
-# sdlc-protocol's sync opens here with each new copy of the guard,
+# with that rule in place, the pull request symphony-protocol/sync, which
+# symphony-protocol's sync opens here with each new copy of the guard,
 # auto-merges only once this job is green. setup-python pins the
 # interpreter, so the runner image moving to a newer Python changes
 # nothing here. The runner has no claude binary, so check.sh skips claude
 # plugin validate and says so; it runs wherever the checks are run by hand
 # with Claude Code installed. A newer push to the same branch cancels the
 # run still going.
-# Before the checks the job clones OpenSpineConsortium/sdlc-protocol, which
-# is public, so the clone needs no token, and names the clone to them in
-# SDLC_PROTOCOL. check.sh's vendoring.py verify holds the copy to
+# Before the checks the job clones OpenSpineConsortium/symphony-protocol,
+# which is public, so the clone needs no token, and names the clone to
+# them in SDLC_PROTOCOL. check.sh's vendoring.py verify holds the copy to
 # plugins/sdlc/vendor/VENDORED, but both sit in this tree, and a pull
 # request that edits the copy can rewrite its line in VENDORED as easily;
 # with the clone named, tests/test_plugin.py compares every file of the
@@ -44,10 +44,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Clone sdlc-protocol, the library the copy is held to
-        run: git clone --quiet https://github.com/OpenSpineConsortium/sdlc-protocol "$RUNNER_TEMP/sdlc-protocol"
+      - name: Clone symphony-protocol, the library the copy is held to
+        run: git clone --quiet https://github.com/OpenSpineConsortium/symphony-protocol "$RUNNER_TEMP/symphony-protocol"
 
       - name: Run the checks
         env:
-          SDLC_PROTOCOL: ${{ runner.temp }}/sdlc-protocol
+          SDLC_PROTOCOL: ${{ runner.temp }}/symphony-protocol
         run: bash scripts/check.sh
