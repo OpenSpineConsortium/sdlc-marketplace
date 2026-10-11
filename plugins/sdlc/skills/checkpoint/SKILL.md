@@ -14,4 +14,4 @@ A checkpoint is what the next session reads first. It is two things: `.claude/se
 5. Run `bash scripts/check.sh`; it fails when the marker pair is missing or doubled.
 6. Commit both files on the issue's branch, in the pull request of the work: `git add .claude/session.md CLAUDE.md`, `git commit -m "Checkpoint"`, push. A checkpoint reaches the default branch by pull request like everything else.
 
-What belongs here and not in docs/memory/: the state of one piece of work. A fact that holds for the project as a whole is a memory (the remember skill, /sdlc:remember).
+What belongs here and not in docs/memory/: the state of one piece of work. A fact that holds for the project as a whole is a memory (the remember skill, /symphony:remember).

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs at the start of every Claude Code session, from the sdlc plugin's
+# Runs at the start of every Claude Code session, from the symphony plugin's
 # hooks/hooks.json; it is the template's .claude/hooks/session-start.sh.
 # What it prints becomes part of the session's context: how far this checkout
 # is ahead of and behind the default branch, and the top of the board. The

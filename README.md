@@ -1,6 +1,6 @@
 # sdlc-marketplace
 
-A Claude Code plugin marketplace with one plugin, `sdlc`: the Claude Code side of the way of working that OpenSpineConsortium/sdlc-template sets up, where the queue is GitHub Issues, a claim is the first push of a branch `claude/<issue>`, the board is the file STATE.md on the branch `board`, and the default branch takes only pull requests. The template's repository holds the rules; this plugin brings the procedures and the fences to every session that works in such a repository, so they arrive by a plugin update (`claude plugin update sdlc@sdlc-marketplace`) instead of by copying files from one repository into the next.
+A Claude Code plugin marketplace with one plugin, `symphony`: the Claude Code side of the way of working that OpenSpineConsortium/sdlc-template sets up, where the queue is GitHub Issues, a claim is the first push of a branch `claude/<issue>`, the board is the file STATE.md on the branch `board`, and the default branch takes only pull requests. The template's repository holds the rules; this plugin brings the procedures and the fences to every session that works in such a repository, so they arrive by a plugin update (`claude plugin update symphony@sdlc-marketplace`) instead of by copying files from one repository into the next.
 
 ## Where this repository fits
 
@@ -8,8 +8,8 @@ This repository is one of the four that run a copy of the claim protocol's libra
 
 ## What the plugin does
 
-- Skills `/sdlc:claim`, `/sdlc:remember` and `/sdlc:checkpoint`: the three procedures a piece of work meets, in that order. Taking an issue the way the repository's docs/agents/PROTOCOL.md requires; adding or correcting a fact in docs/memory/ in the same pull request as the change it came from; recording where the work stands in .claude/session.md and in the marker section of CLAUDE.md. They are the template's own skills and act on the template's files, so they name the repository's tools as the template does (tools/marked_section.py, scripts/check.sh).
-- Command `/sdlc:board`: fetches the board and prints it whole.
+- Skills `/symphony:claim`, `/symphony:remember` and `/symphony:checkpoint`: the three procedures a piece of work meets, in that order. Taking an issue the way the repository's docs/agents/PROTOCOL.md requires; adding or correcting a fact in docs/memory/ in the same pull request as the change it came from; recording where the work stands in .claude/session.md and in the marker section of CLAUDE.md. They are the template's own skills and act on the template's files, so they name the repository's tools as the template does (tools/marked_section.py, scripts/check.sh).
+- Command `/symphony:board`: fetches the board and prints it whole.
 - A push guard, before every Bash call: refuses a push to the default branch or to `board`, a plain `--force` anywhere, a push of every branch at once, and `--force-with-lease` outside a `claude/` branch, with exit code 2 and the reason on stderr, which Claude Code feeds back into the session. Anything it cannot read it lets through, since branch protection on GitHub still stands behind it.
 - A document check, after every Edit and Write that touches CLAUDE.md, README.md, .claude/, docs/, tools/ or .github/: runs the repository's own tools/check_docs.py, the checks its CI runs, and feeds any problem back at once with exit code 2. A repository without that file has no checks to run, and the hook stays silent.
 - At session start: how far the checkout is ahead of and behind the default branch, and the first 120 lines of the board.
@@ -22,12 +22,12 @@ In Claude Code:
 
 ```
 /plugin marketplace add OpenSpineConsortium/sdlc-marketplace
-/plugin install sdlc@sdlc-marketplace
+/plugin install symphony@sdlc-marketplace
 ```
 
-The install goes to the user scope by default, which turns the push guard on in every repository the user opens; the guard refuses a push to the default branch wherever it runs. For a repository made from the template, the project preset below is the better fit, or the shell form with the project scope: `claude plugin install sdlc@sdlc-marketplace --scope project`.
+The install goes to the user scope by default, which turns the push guard on in every repository the user opens; the guard refuses a push to the default branch wherever it runs. For a repository made from the template, the project preset below is the better fit, or the shell form with the project scope: `claude plugin install symphony@sdlc-marketplace --scope project`.
 
-Claude Code turns auto-update off by default for a marketplace that is not Anthropic's, so an install made this way takes a new release only when asked: `claude plugin update sdlc@sdlc-marketplace`, or turn auto-update on once under `/plugin`, Marketplaces, sdlc-marketplace, Enable auto-update. The project preset below turns it on for everyone who works in the repository.
+Claude Code turns auto-update off by default for a marketplace that is not Anthropic's, so an install made this way takes a new release only when asked: `claude plugin update symphony@sdlc-marketplace`, or turn auto-update on once under `/plugin`, Marketplaces, sdlc-marketplace, Enable auto-update. The project preset below turns it on for everyone who works in the repository.
 
 The marketplace needs only Python 3.12 or later, bash and git on the machine: the plugin's scripts use the standard library alone.
 
@@ -47,7 +47,7 @@ A repository made from the template enables the plugin for everyone who works in
     }
   },
   "enabledPlugins": {
-    "sdlc@sdlc-marketplace": true
+    "symphony@sdlc-marketplace": true
   }
 }
 ```
@@ -72,7 +72,7 @@ Some of the template is not a plugin's to carry, and stays in the repository mad
 ## Layout
 
 ```
-.claude-plugin/marketplace.json     the marketplace: one plugin, sdlc
+.claude-plugin/marketplace.json     the marketplace: one plugin, symphony
 plugins/sdlc/.claude-plugin/plugin.json
 plugins/sdlc/skills/                claim, remember, checkpoint
 plugins/sdlc/commands/board.md
