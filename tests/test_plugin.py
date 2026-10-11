@@ -142,13 +142,13 @@ class MarketplaceManifestTest(unittest.TestCase):
 
     def test_the_entry_names_and_finds_the_plugin(self):
         entry = self.marketplace["plugins"][0]
-        self.assertEqual(entry["name"], "sdlc")
+        self.assertEqual(entry["name"], "symphony")
         self.assertEqual(entry["source"], "./plugins/sdlc")
         self.assertTrue(entry["description"])
         self.assertEqual((ROOT / entry["source"]).resolve(), PLUGIN.resolve())
 
     def test_plugin_manifest_has_its_fields(self):
-        self.assertEqual(self.plugin["name"], "sdlc")
+        self.assertEqual(self.plugin["name"], "symphony")
         self.assertRegex(self.plugin["version"], r"^\d+\.\d+\.\d+$")
         self.assertTrue(self.plugin["description"])
         self.assertEqual(self.plugin["author"], {"name": "OpenSpineConsortium"})
@@ -411,7 +411,7 @@ class ReleaseTest(unittest.TestCase):
         entry = preset["extraKnownMarketplaces"][name]
         self.assertEqual(entry["source"], {"source": "github", "repo": REPOSITORY})
         self.assertIs(entry["autoUpdate"], True)
-        self.assertEqual(preset["enabledPlugins"], {f"sdlc@{name}": True})
+        self.assertEqual(preset["enabledPlugins"], {f"symphony@{name}": True})
 
 
 class WorkflowTest(unittest.TestCase):
