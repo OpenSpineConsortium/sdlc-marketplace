@@ -43,7 +43,7 @@ REPOSITORY = "OpenSpineConsortium/symphony-marketplace"
 # The library's ecosystem.json at the recorded commit, which predates the
 # rename, knows this repository by its old name; either name is this one.
 REPOSITORY_NAMES = {REPOSITORY.lower(), "openspineconsortium/sdlc-marketplace"}
-SKILLS = ("claim", "remember", "checkpoint")
+SKILLS = ("claim", "remember", "checkpoint", "new")
 
 # What the plugin itself runs from the copy: the push guard, which the
 # PreToolUse hook calls, and the copy's own check, which scripts/check.sh
