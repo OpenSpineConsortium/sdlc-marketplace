@@ -8,7 +8,7 @@
     {
       "name": "symphony",
       "source": "./plugins/sdlc",
-      "description": "Claim, remember and checkpoint skills, the /symphony:board command, a push guard that refuses what the board rules forbid, a document check after every edit, and the board printed at session start."
+      "description": "Claim, remember, checkpoint and new skills, the /symphony:board command, a push guard that refuses what the board rules forbid, a document check after every edit, and the board printed at session start."
     }
   ]
 }

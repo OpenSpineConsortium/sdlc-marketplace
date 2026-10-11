@@ -1,7 +1,7 @@
 {
   "name": "symphony",
-  "version": "0.1.1",
-  "description": "Symphony, the board protocol of OpenSpineConsortium/symphony-template, for Claude Code: claim, remember and checkpoint skills, the board command, a push guard, a document check after every edit, and the board printed at session start.",
+  "version": "0.1.2",
+  "description": "Symphony, the board protocol of OpenSpineConsortium/symphony-template, for Claude Code: claim, remember, checkpoint and new skills, the board command, a push guard, a document check after every edit, and the board printed at session start.",
   "author": {
     "name": "OpenSpineConsortium"
   },
