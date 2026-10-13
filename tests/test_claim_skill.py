@@ -51,8 +51,17 @@ CLAIM_STEPS = {
 }
 CHECKPOINT_STEP = 6
 CHECKPOINT_COMMANDS = ["git add .claude/session.md CLAUDE.md", 'git commit -m "Checkpoint"', "git push origin claude/N"]
+# No git of the test's runs gc or maintenance on its own: git 2.55 on
+# GitHub's runners starts it after a push or a fetch, and it was still
+# writing into the bare remote's objects when the scratch folder was
+# removed, which failed the cleanup at random ("Directory not empty").
+QUIET = {"gc.auto": "0", "gc.autoDetach": "false", "maintenance.auto": "false", "maintenance.autoDetach": "false",
+         "receive.autogc": "false"}
 GIT_ENV = {"GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.invalid", "GIT_COMMITTER_NAME": "Test",
-           "GIT_COMMITTER_EMAIL": "test@example.invalid", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
+           "GIT_COMMITTER_EMAIL": "test@example.invalid", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+           "GIT_CONFIG_COUNT": str(len(QUIET)),
+           **{f"GIT_CONFIG_KEY_{i}": key for i, key in enumerate(QUIET)},
+           **{f"GIT_CONFIG_VALUE_{i}": value for i, value in enumerate(QUIET.values())}}
 
 
 def step_of(path, number):
@@ -79,6 +88,11 @@ class Scratch:
         for target, bare in ((self.origin, ["--bare"]), (self.admin, [])):
             subprocess.run(["git", "init", "-q", *bare, "--initial-branch=main", str(target)], check=True,
                            env=self.env(), capture_output=True)
+            # In the repository's own configuration too: git drops
+            # GIT_CONFIG_COUNT when it starts the receiving end of a local
+            # push, which then runs its own gc or maintenance.
+            for key, value in QUIET.items():
+                self.git(target, "config", key, value)
         self.git(self.admin, "remote", "add", "origin", str(self.origin))
         self.write(self.admin, "README.md", "Start\n")
         self.git(self.admin, "add", "README.md")
