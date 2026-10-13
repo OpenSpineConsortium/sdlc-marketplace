@@ -1,14 +1,15 @@
 """Refuse a git push the board rules forbid, before it runs.
 
-Claude Code runs this as a PreToolUse hook on the Bash tool, wired in the
-plugin's hooks/hooks.json: the tool call arrives as JSON on stdin, exit
-code 2 stops it, and stderr goes back into the session as the reason. The
-rules are not here but in the vendored push guard of sdlc_protocol
-(vendor/sdlc_protocol/guard.py, copied from OpenSpineConsortium/
-symphony-protocol), so the plugin, the template and the library refuse
-the same pushes with the same words; this file only does what the
-template's tools/guard_push.py main does around them, reading stdin and
-speaking the hook's exit codes.
+Claude Code runs this as a PreToolUse hook on the Bash tool, through
+scripts/guard.sh, which the plugin's hooks/hooks.json names and which
+refuses a push when this file cannot run at all: the tool call arrives as
+JSON on stdin, exit code 2 stops it, and stderr goes back into the session
+as the reason. The rules are not here but in the vendored push guard of
+sdlc_protocol (vendor/sdlc_protocol/guard.py, copied from
+OpenSpineConsortium/symphony-protocol), so the plugin, the template and
+the library refuse the same pushes with the same words; this file only
+does what the template's tools/guard_push.py main does around them,
+reading stdin and speaking the hook's exit codes.
 
 A payload that is not JSON passes, as the library lets pass every payload
 it cannot read: the hook is the first fence and branch protection on

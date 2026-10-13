@@ -143,6 +143,20 @@ def run_script(script, stdin, cwd=ROOT, **env):
                           capture_output=True, text=True, timeout=60, env=clean_env(**env))
 
 
+# The files every adoption brings, of either kind (symphony-start's
+# scripts/adopt.py: PROTOCOL_FILES and the protocol page in mode existing,
+# the whole template in mode new), which a skill may name without saying
+# what to do where they are missing; and per skill, what it makes itself.
+EVERY_ADOPTION = {"CLAUDE.md", "docs/agents/PROTOCOL.md", "docs/agents/claims/README.md",
+                  ".github/workflows/board.yml"}
+MADE_BY = {"claim": {"docs/agents/claims/N.md"},
+           "checkpoint": {".claude/session.md", "docs/memory/"},
+           "remember": {"docs/memory/", "docs/memory/MEMORY.md"}}
+QUALIFIERS = ("where the repository has", "where it has", "if you have", "where it says",
+              "whose claude.md")
+REPOSITORY_PATH = re.compile(r"(?<![\w/$.{])((?:\.claude|\.github|docs|scripts|tools)/[\w./-]*)")
+
+
 class MarketplaceManifestTest(unittest.TestCase):
     def setUp(self):
         self.marketplace = read_json(ROOT / ".claude-plugin" / "marketplace.json")
@@ -192,6 +206,28 @@ class ComponentsTest(unittest.TestCase):
 
     def test_the_board_command_has_a_description(self):
         self.assertTrue(frontmatter(PLUGIN / "commands" / "board.md").get("description"))
+
+    def test_the_skills_name_unqualified_only_files_every_adoption_has(self):
+        """A repository adopted with the protocol only has none of the
+        template's rules, memory, checkpoint helper or checks, and the skills
+        run there too: a sentence that names a file outside what every
+        adoption brings, or what the skill makes itself, says what holds
+        where the repository lacks it. The new skill is left out, since it
+        makes a repository from the whole template and acts on its files."""
+        for name in [s for s in SKILLS if s != "new"] + ["board command"]:
+            path = (PLUGIN / "commands" / "board.md" if name == "board command"
+                    else PLUGIN / "skills" / name / "SKILL.md")
+            text = path.read_text(encoding="utf-8").split("\n---\n", 1)[1]
+            for sentence in re.split(r"(?<=[.;:])\s+|\n", text):
+                for named in REPOSITORY_PATH.findall(sentence):
+                    if named.rstrip(".") in EVERY_ADOPTION | MADE_BY.get(name, set()):
+                        continue
+                    self.assertTrue(any(q in sentence.lower() for q in QUALIFIERS), (name, named, sentence))
+
+    def test_the_board_command_cites_the_protocol_page_every_adoption_has(self):
+        text = (PLUGIN / "commands" / "board.md").read_text(encoding="utf-8")
+        self.assertIn("as docs/agents/PROTOCOL.md requires", text)
+        self.assertNotIn(".claude/rules/", text)
 
     def test_no_template_placeholder_is_left_unfilled(self):
         """The template fills {{...}} when a repository is made from it; in
@@ -531,6 +567,93 @@ class GuardHookTest(unittest.TestCase):
     def test_a_payload_that_is_not_json_passes(self):
         done = run_script("guard.py", "not json")
         self.assertEqual((done.returncode, done.stderr), (0, ""))
+
+
+STORE_STUB = """#!/bin/sh
+echo "Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut from Settings > Manage App Execution Aliases." >&2
+exit 49
+"""
+COULD_NOT_RUN = ("the push guard could not run (python3 exited {code}), so this push is refused: "
+                 "install Python 3.12 or later and put it first on PATH, then push again "
+                 "(docs/agents/PROTOCOL.md)\n")
+
+
+class GuardWrapperTest(unittest.TestCase):
+    """The hook as hooks.json names it, scripts/guard.sh: the guard's own
+    answer where Python runs, and a refused push where it cannot, which
+    Claude Code would otherwise read as no objection to every push."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.folder = tempfile.TemporaryDirectory()
+        cls.repo = make_git_repo(cls.folder.name, "claude/7")
+        cls.stub = Path(cls.folder.name) / "stub"
+        cls.stub.mkdir()
+        (cls.stub / "python3").write_text(STORE_STUB, encoding="utf-8")
+        (cls.stub / "python3").chmod(0o755)
+        cls.bare = Path(cls.folder.name) / "bare"
+        cls.bare.mkdir()
+        for tool in ("cat", "dirname", "grep"):
+            (cls.bare / tool).symlink_to(shutil.which(tool))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.folder.cleanup()
+
+    def run_wrapper(self, command, path=None):
+        payload = json.dumps({"tool_input": {"command": command}, "cwd": str(self.repo)})
+        env = clean_env(PATH=path) if path else clean_env()
+        done = subprocess.run([shutil.which("bash"), str(SCRIPTS / "guard.sh")], input=payload,
+                              cwd=ROOT, capture_output=True, text=True, timeout=60, env=env)
+        return done.returncode, done.stderr
+
+    def with_stub(self):
+        return f"{self.stub}{os.pathsep}{os.environ.get('PATH', '')}"
+
+    def test_the_hook_runs_the_wrapper(self):
+        commands = [command for event, _, command in hook_commands() if event == "PreToolUse"]
+        self.assertEqual(commands, ['bash "${CLAUDE_PLUGIN_ROOT}/scripts/guard.sh"'])
+
+    def test_where_python_runs_a_refusal_is_the_guards_own(self):
+        self.assertEqual(self.run_wrapper("git push origin main"), (2, MAIN_REFUSAL))
+
+    def test_where_python_runs_the_claim_push_passes(self):
+        self.assertEqual(self.run_wrapper("git push -u origin claude/7"), (0, ""))
+
+    def test_the_store_stub_refuses_every_push(self):
+        for command in ("git push -u origin claude/7", "git push origin main"):
+            self.assertEqual(self.run_wrapper(command, self.with_stub()),
+                             (2, COULD_NOT_RUN.format(code=49)), command)
+
+    def test_the_store_stub_lets_a_command_without_a_push_through(self):
+        self.assertEqual(self.run_wrapper("git status", self.with_stub()), (0, ""))
+
+    def test_no_python_at_all_refuses_a_push(self):
+        self.assertEqual(self.run_wrapper("git push origin main", str(self.bare)),
+                         (2, COULD_NOT_RUN.format(code=127)))
+
+    def test_no_python_at_all_lets_a_command_without_a_push_through(self):
+        self.assertEqual(self.run_wrapper("ls -la", str(self.bare)), (0, ""))
+
+    def test_run_from_its_own_folder_it_still_finds_the_guard(self):
+        payload = json.dumps({"tool_input": {"command": "git push origin main"}, "cwd": str(self.repo)})
+        done = subprocess.run([shutil.which("bash"), "guard.sh"], input=payload, cwd=SCRIPTS,
+                              capture_output=True, text=True, timeout=60, env=clean_env())
+        self.assertEqual((done.returncode, done.stderr), (2, MAIN_REFUSAL))
+
+    def test_without_the_guard_beside_it_a_push_is_refused_and_nothing_else(self):
+        """A path the swap cannot resolve must not read as the guard's own
+        refusal: python3 answers 2 for a file it cannot open, which would
+        stop every command, so the wrapper never runs a guard that is not there."""
+        alone = Path(self.folder.name) / "alone"
+        alone.mkdir(exist_ok=True)
+        shutil.copy(SCRIPTS / "guard.sh", alone / "guard.sh")
+        for command, expected in (("git push origin main", (2, COULD_NOT_RUN.format(code=127))),
+                                  ("git status", (0, ""))):
+            payload = json.dumps({"tool_input": {"command": command}, "cwd": str(self.repo)})
+            done = subprocess.run([shutil.which("bash"), str(alone / "guard.sh")], input=payload,
+                                  cwd=ROOT, capture_output=True, text=True, timeout=60, env=clean_env())
+            self.assertEqual((done.returncode, done.stderr), expected, command)
 
 
 MARKERS = "<!-- cswap:checkpoint:begin -->\n<!-- cswap:checkpoint:end -->\n"
